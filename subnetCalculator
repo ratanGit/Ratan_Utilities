@@ -1,0 +1,93 @@
+    <#
+    .SYNOPSIS
+        A powewrShell Based Subnet Calculator
+    .DESCRIPTION
+        Derives Essential network information from a hosts IP (V4) address and CIDR.
+    .PARAMETER $ip
+        IP Address in decimal notation e.g., 10.10.1.50
+    .PARAMETER $cidr
+        CIDR, e.g., 24        
+    .NOTES
+        Author: Ratan Mohapatra
+        Last Update: March 17, 2019
+    #>
+clear
+$myInterfaces = Get-NetAdapter -Physical
+$int = $myInterfaces | where-object{$_.Status -eq 'up'}
+$ipV4Info = Get-NetIPAddress -AddressFamily IPv4 -InterfaceIndex $int.InterfaceIndex | select *
+$ip = $ipV4Info.IPAddress
+$CIDR = $ipV4Info.PrefixLength
+
+$ip = Read-host 'What is the IPaddress, e.g., 10.10.1.50 '
+$cidr = Read-host 'What is the CID, e.g., 24 '
+
+#Deriveused and unused blocks 
+$PatiallyUsedBlock = ($CIDR % 8)
+$FilledBlocks = ($CIDR - $PatiallyUsedBlock)/8
+$SubnetMask = ""
+$SubnetMask = '255.' * $FilledBlocks
+
+[int]$AvialableOctets = 0
+    $lastUsedBlock = $FilledBlocks
+    [int]$AvialableOctets = 4 - $lastUsedBlock
+    $SplitIPAddress = ($ip).split('.')
+    $HostOctetValue = $SplitIPAddress[0]
+    $NetworkIDString = $HostOctetValue
+    $BroadcastIDString = $HostOctetValue
+function getSubnetInfo{
+    param($ArrayIPDecimals,$ArraySubnetMakDecimals, [int]$NumberOfHosts,[string]$subnetMask)
+        $numMaskElements = $ArraySubnetMakDecimals.length
+        for($j=1; $j -lt $numMaskElements; $j++){
+        [int]$MaskOctetValue = $ArraySubnetMakDecimals[$j]
+        [int]$HostValue = $ArrayIPDecimals[$j]
+        switch($MaskOctetValue){
+            255{
+                $NetworkIDString = "$NetworkIDString.$HostValue"
+                $BroadcastIDString = "$BroadcastIDString.$HostValue"
+                }
+            0{
+                $BroadcastIDString = $BroadcastIDString + '.255'             
+                $NetworkIDString = $NetworkIDString + '.0'
+                if($j -eq $splitSubnetMask.Length -1){
+                    $firstHost = $NetworkIDString.split('.')[0] + '.' +$NetworkIDString.split('.')[1] +'.' + $NetworkIDString.split('.')[2] + '.1'
+                    $lastHost = $BroadcastIDString.split('.')[0] + '.' +$BroadcastIDString.split('.')[1] +'.' + $BroadcastIDString.split('.')[2] + '.254'
+                  }                              
+                }
+            default{
+                $NetworkIDString = $NetworkIDString + '.' + [string]$HostValue
+                $BroadcastIDString = $BroadcastIDString + '.' + [string](255 - $HostValue)                   
+                }
+            }
+        }
+    $ul = '~'*30
+    $arrResults = "`nInformation About your NetWork:`n$ul
+Network Address`t`t: $NetworkIDString
+Boradcast Address`t: $BroadcastIDString
+Subnet Mask`t`t`t: $subnetMask
+Number of Hosts`t: $NumberOfHosts
+First Host IP`t: $FirstHost
+Last Host IP`t: $LastHost
+"
+    return $arrResults
+    }
+#Classfull
+if($PatiallyUsedBlock -eq 0){
+    #derive Subnet mask:
+    $SubnetMask = ($SubnetMask + '0.' * $AvialableOctets).TrimEnd('.')
+    $splitSubnetMask = ($SubnetMask).split('.')
+    }
+#Classless
+else{
+    #drive subnet mask:
+    [int]$NetWorkBitValue = 0
+    for($i = 1; $i -le $PatiallyUsedBlock; $i++){
+        $NetWorkBitValue = $NetWorkBitValue + [math]::pow( 2,8-$i )
+        }
+    $SubnetMask = $SubnetMask + [string]$NetWorkBitValue + '.0' * ($AvialableOctets-1)
+    $splitSubnetMask = ($SubnetMask).split('.') 
+    }
+
+$numOfHosts = [math]::pow( 2,(32 - $CIDR) ) - 2
+$arrWrite = getSubnetInfo -ArrayIPDecimals $SplitIPAddress -ArraySubnetMakDecimals $splitSubnetMask -NumberOfHosts $numOfHosts -subnetMask $SubnetMask
+
+Write-Host $arrWrite

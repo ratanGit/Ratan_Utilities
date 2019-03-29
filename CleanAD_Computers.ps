@@ -1,0 +1,40 @@
+#clean hosts by IP addresses in a CSV file
+
+$hosts_CSV_File = "$env:userprofile\desktop\hosts.csv"
+$header = 'IP Address'
+#CSV Files
+$csv = Import-Csv -Path $hosts_CSV_File
+$i=0
+foreach($line in $csv){
+$i = $i+1
+$ip = $line.($header)
+echo "$i`t $ip"
+}
+
+
+$yr = (get-date).year
+$Report_CSV_File = "$env:userprofile\desktop\Report_Hosts_$yr.csv"
+
+#this is one time data retrieval from the Domain
+$ADhost = Get-ADComputer -filter * -Properties *
+$resultVariables = [System.Collections.ArrayList]@()
+
+foreach($line in $csv){
+    #lop through the ADhost variable
+    $ip = $line.($header)
+    foreach($host in $ADhost){
+        if($host.ipv4Address -match $ip){
+            $lastLogon = $host.LastLogonDate
+            $os = $host.operatingsystem
+            $sam = $host.samaccountname
+            $create = $host.Ceated
+            $Pingresult = (Test-NetConnection $ip).PingSucceeded
+            $resultVariables += New-Object psobject -Property @{IP=$ip; HostName=$sam; LastLogon = $lastLogon; WhenCreated = $create; Ping = $Pingresult}
+            }
+        }
+    }
+
+#export to CSV
+
+$resultVariables | Export-Csv -Path $Report_CSV_File -NoTypeInformation
+start-process excel.exe $Report_CSV_File
